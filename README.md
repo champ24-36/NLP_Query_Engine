@@ -36,6 +36,60 @@ A dynamic natural language query system that automatically discovers database sc
 - Query history and suggestions
 - Export functionality
 
+## Architecture
+
+### Backend Components
+
+#### Schema Discovery (`services/schema_discovery.py`)
+```python
+class SchemaDiscovery:
+    def analyze_database(self, connection_string: str) -> dict
+    def map_natural_language_to_schema(self, query: str, schema: dict) -> dict
+```
+
+#### Document Processor (`services/document_processor.py`)
+```python
+class DocumentProcessor:
+    def process_documents(self, file_paths: list) -> dict
+    def dynamic_chunking(self, content: str, doc_type: str) -> list
+```
+
+#### Query Engine (`services/query_engine.py`)
+```python
+class QueryEngine:
+    def process_query(self, user_query: str) -> dict
+    def optimize_sql_query(self, sql: str) -> str
+```
+
+#### Cache Service (`services/cache_service.py`)
+```python
+class QueryCache:
+    def get(self, key: str) -> Optional[Any]
+    def set(self, key: str, value: Any, ttl: int = None)
+```
+
+### Frontend Components
+
+- **DatabaseConnector**: Handle database connections and schema visualization
+- **DocumentUploader**: File upload with progress tracking
+- **QueryInterface**: Natural language query input and suggestions
+- **ResultsDisplay**: Adaptive results rendering based on query type
+
+## API Endpoints
+
+### Database Management
+- `POST /api/connect-database` - Connect and analyze database
+- `GET /api/schema` - Get discovered schema information
+
+### Document Processing
+- `POST /api/upload-documents` - Upload and process documents
+- `GET /api/ingestion-status/{job_id}` - Check processing status
+
+### Query Processing
+- `POST /api/query` - Process natural language query
+- `GET /api/query/history` - Get query history
+- `GET /api/metrics` - Get system performance metrics
+
 ## Quick Start
 
 ### Prerequisites
@@ -93,7 +147,6 @@ docker-compose up --build
 3. **Access the Application**
    - Frontend: http://localhost:3000
    - Backend API: http://localhost:8000
-   - API Documentation: http://localhost:8000/docs
 
 ## Usage Guide
 
@@ -122,70 +175,6 @@ docker-compose up --build
    - "Employees with machine learning skills earning over 100k"
 3. View results in tables, cards, or hybrid format
 4. Export results as needed
-
-## Architecture
-
-### Backend Components
-
-#### Schema Discovery (`services/schema_discovery.py`)
-```python
-class SchemaDiscovery:
-    def analyze_database(self, connection_string: str) -> dict
-    def map_natural_language_to_schema(self, query: str, schema: dict) -> dict
-```
-
-#### Document Processor (`services/document_processor.py`)
-```python
-class DocumentProcessor:
-    def process_documents(self, file_paths: list) -> dict
-    def dynamic_chunking(self, content: str, doc_type: str) -> list
-```
-
-#### Query Engine (`services/query_engine.py`)
-```python
-class QueryEngine:
-    def process_query(self, user_query: str) -> dict
-    def optimize_sql_query(self, sql: str) -> str
-```
-
-#### Cache Service (`services/cache_service.py`)
-```python
-class QueryCache:
-    def get(self, key: str) -> Optional[Any]
-    def set(self, key: str, value: Any, ttl: int = None)
-```
-
-### Frontend Components
-
-- **DatabaseConnector**: Handle database connections and schema visualization
-- **DocumentUploader**: File upload with progress tracking
-- **QueryInterface**: Natural language query input and suggestions
-- **ResultsDisplay**: Adaptive results rendering based on query type
-
-## API Endpoints
-
-### Database Management
-- `POST /api/connect-database` - Connect and analyze database
-- `GET /api/schema` - Get discovered schema information
-
-### Document Processing
-- `POST /api/upload-documents` - Upload and process documents
-- `GET /api/ingestion-status/{job_id}` - Check processing status
-
-## API Endpoints
-
-### Database Management
-- `POST /api/connect-database` - Connect and analyze database
-- `GET /api/schema` - Get discovered schema information
-
-### Document Processing
-- `POST /api/upload-documents` - Upload and process documents
-- `GET /api/ingestion-status/{job_id}` - Check processing status
-
-### Query Processing
-- `POST /api/query` - Process natural language query
-- `GET /api/query/history` - Get query history
-- `GET /api/metrics` - Get system performance metrics
 
 ## Supported Database Schemas
 
