@@ -11,18 +11,22 @@ import os
 from datetime import datetime
 import json
 import uuid
+import sys
+
+# Add parent directory to path for imports
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Import our services
-from api.routes.ingestion import router as ingestion_router
-from api.routes.query import router as query_router  
-from api.routes.schema import router as schema_router
-from services.schema_discovery import SchemaDiscovery
-from services.document_processor import DocumentProcessor
-from services.query_engine import QueryEngine
-from services.cache_service import QueryCache
+from api.services.schema_discovery import SchemaDiscovery
+from api.services.document_processor import DocumentProcessor
+from api.services.query_engine import QueryEngine
+from api.services.cache_service import QueryCache
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
@@ -102,6 +106,7 @@ async def connect_database(connection: DatabaseConnection):
         
         # Initialize query engine with discovered schema
         app_state.query_engine = QueryEngine(connection.connection_string)
+        app_state.query_engine.document_processor = app_state.document_processor
         app_state.connected_database = True
         app_state.schema_info = schema_info
         
@@ -154,13 +159,16 @@ async def process_documents_background(job_id: str, files: List[UploadFile]):
     try:
         processed_files = []
         
+        # Create upload directory if it doesn't exist
+        os.makedirs("/tmp/uploads", exist_ok=True)
+        
         for file in files:
             try:
                 # Read file content
                 content = await file.read()
                 
                 # Save temporary file
-                temp_path = f"/tmp/{file.filename}"
+                temp_path = f"/tmp/uploads/{file.filename}"
                 with open(temp_path, "wb") as f:
                     f.write(content)
                 
@@ -179,7 +187,8 @@ async def process_documents_background(job_id: str, files: List[UploadFile]):
                 job["processed_files"] += 1
                 
                 # Cleanup temp file
-                os.remove(temp_path)
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
                 
             except Exception as e:
                 logger.error(f"Failed to process {file.filename}: {str(e)}")
@@ -230,11 +239,21 @@ async def process_query(query_request: QueryRequest) -> QueryResponse:
         cached_result = app_state.cache.get(cache_key)
         
         if cached_result:
+            processing_time = time.time() - start_time
             performance_metrics = {
-                "response_time": time.time() - start_time,
+                "response_time": processing_time,
                 "cache_hit": True,
                 "query_complexity": "cached"
             }
+            
+            # Add to query history
+            result_with_cache = {
+                **cached_result, 
+                'cached': True,
+                'processing_time': processing_time,
+                'query': query_request.query
+            }
+            app_state.cache.add_query_to_history(query_request.query, result_with_cache)
             
             return QueryResponse(
                 results=cached_result["results"],
@@ -250,11 +269,21 @@ async def process_query(query_request: QueryRequest) -> QueryResponse:
         # Cache the result
         app_state.cache.set(cache_key, result)
         
+        processing_time = time.time() - start_time
         performance_metrics = {
-            "response_time": time.time() - start_time,
+            "response_time": processing_time,
             "cache_hit": False,
             "query_complexity": result.get("complexity", "medium")
         }
+        
+        # Add to query history
+        result_with_metrics = {
+            **result, 
+            'cached': False, 
+            'processing_time': processing_time,
+            'query': query_request.query
+        }
+        app_state.cache.add_query_to_history(query_request.query, result_with_metrics)
         
         return QueryResponse(
             results=result["results"],
@@ -270,8 +299,8 @@ async def process_query(query_request: QueryRequest) -> QueryResponse:
 
 # Get query history
 @app.get("/api/query/history")
-async def get_query_history():
-    return app_state.cache.get_recent_queries()
+async def get_query_history(limit: int = 20):
+    return app_state.cache.get_recent_queries(limit)
 
 # Get current schema
 @app.get("/api/schema")
@@ -291,11 +320,13 @@ async def get_schema():
 # Get system metrics
 @app.get("/api/metrics")
 async def get_metrics():
+    cache_stats = app_state.cache.get_stats()
+    
     return {
         "database_connected": app_state.connected_database,
         "documents_indexed": len(app_state.document_processor.document_store),
-        "cache_size": app_state.cache.size(),
-        "cache_hit_rate": app_state.cache.hit_rate(),
+        "cache_size": cache_stats['size'],
+        "cache_hit_rate": cache_stats['hit_rate'],
         "active_jobs": len([j for j in app_state.ingestion_jobs.values() if j["status"] == "processing"])
     }
 
